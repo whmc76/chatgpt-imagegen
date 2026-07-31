@@ -1,6 +1,8 @@
 # chatgpt-imagegen
 
-[![CI](https://github.com/leeguooooo/chatgpt-imagegen/actions/workflows/ci.yml/badge.svg)](https://github.com/leeguooooo/chatgpt-imagegen/actions/workflows/ci.yml)
+[![CI](https://github.com/whmc76/chatgpt-imagegen/actions/workflows/ci.yml/badge.svg)](https://github.com/whmc76/chatgpt-imagegen/actions/workflows/ci.yml)
+
+> Windows-stable fork of [leeguooooo/chatgpt-imagegen](https://github.com/leeguooooo/chatgpt-imagegen). This fork adds native Windows process locking, Windows CI, a self-contained Codex skill layout, bounded-wait defaults, and verified Windows instructions while preserving the upstream MIT license and history.
 
 **English** | [中文](./README.zh-CN.md)
 
@@ -24,7 +26,7 @@ Needs Python 3.10+ and a ChatGPT subscription (free tier works).
 **For AI agents (recommended)** — drops the skill into Claude Code, Codex, Cursor, etc.:
 
 ```bash
-npx skills add leeguooooo/chatgpt-imagegen -g
+npx skills add whmc76/chatgpt-imagegen -g
 ```
 
 Then just ask: *"画一张 …"* / *"generate a hero banner for the README"*.
@@ -32,9 +34,20 @@ Then just ask: *"画一张 …"* / *"generate a hero banner for the README"*.
 **Standalone CLI** — no `pip`, no virtualenv:
 
 ```bash
-git clone https://github.com/leeguooooo/chatgpt-imagegen
+git clone https://github.com/whmc76/chatgpt-imagegen
 sudo install chatgpt-imagegen/chatgpt-imagegen /usr/local/bin/chatgpt-imagegen
 ```
+
+**Windows Codex quick start** - no browser extension required:
+
+```powershell
+git clone https://github.com/whmc76/chatgpt-imagegen
+cd chatgpt-imagegen
+py -3 .\chatgpt-imagegen doctor
+py -3 .\chatgpt-imagegen "a watercolor cat on a windowsill" --backend codex --timeout 300 --stall-timeout 90 -o cat.png
+```
+
+The `codex` backend consumes Codex usage. The optional `web` backend uses a logged-in Chrome through `chrome-use` and remains serial.
 
 You also need **one backend** — `web` (default, drives your logged-in Chrome, spends no Codex-usage) or `codex` (headless fallback). `chatgpt-imagegen doctor` shows what's ready. → **[Backends & troubleshooting](https://drawstyle.leeguoo.com/en/docs/backends)**
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "ChatGPT ImageGen Stable"
+  short_description: "Generate images with bounded waits and file verification"
+  default_prompt: "Use $chatgpt-imagegen to generate an image reliably and save it into the current workspace."
