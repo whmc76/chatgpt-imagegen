@@ -48,6 +48,7 @@ Pass up to four references with repeated `--ref "<path-or-url>"` arguments. Trea
 
 ## Failure recovery
 
+- The CLI already retries one incomplete Codex stream, transport interruption, or transient 5xx response inside the original total timeout budget. Do not immediately add another outer retry after that retry is exhausted.
 - `stalled`: retry once only when no rate-limit message appeared, using `--timeout 420 --stall-timeout 150`. If it stalls again, stop and report the last phase.
 - Total timeout after active progress: retry once with `--timeout 420`; do not retry indefinitely.
 - HTTP 429 or account-limit banner: stop. Do not loop or switch backends immediately.
@@ -64,4 +65,4 @@ Pass up to four references with repeated `--ref "<path-or-url>"` arguments. Trea
 
 ## Provenance and maintenance
 
-The bundled MIT-licensed CLI is derived from `leeguooooo/chatgpt-imagegen` 0.21.2 at commit `f47816d5560b1052f47a3cbfbe1a7c20aa2638a9`. This copy adds a Windows-safe concurrency lock using `msvcrt.locking` while retaining `fcntl.flock` on POSIX. Do not replace the script from upstream without reapplying or confirming an equivalent Windows fix, then rerun doctor, a Windows lock-contention check, and a live generation.
+The bundled MIT-licensed CLI is derived from `leeguooooo/chatgpt-imagegen` 0.21.2 at commit `f47816d5560b1052f47a3cbfbe1a7c20aa2638a9`. This fork adds a Windows-safe concurrency lock using `msvcrt.locking`, retains `fcntl.flock` on POSIX, and retries one transient Codex stream interruption inside the original total timeout budget. Do not replace the script from upstream without reapplying or confirming equivalent fixes, then rerun doctor, a Windows lock-contention check, and a live generation.

@@ -29,7 +29,7 @@ Setup (one-time):
                    in to chatgpt.com in that browser.
     codex backend: `npm i -g @openai/codex` and run `codex login`.
 
-Project: https://github.com/leeguooooo/chatgpt-imagegen
+Project: https://github.com/whmc76/chatgpt-imagegen
 """
 from __future__ import annotations
 
@@ -62,13 +62,14 @@ if os.name == "nt":
 else:
     import fcntl
 
-__version__ = "0.21.2"
+__version__ = "0.21.3"
 
 # What's-new, newest first — one terse line per release. The update reminder
 # surfaces these so a user learns WHAT changed, not just that a newer version
 # exists. Kept as flat, easy-to-regex comments near the top so the remote copy
 # can be parsed from the same 8KB prefix the reminder already reads — no extra
 # file to drift, no import needed. Format: `# WHATSNEW[<version>]: <summary>`.
+# WHATSNEW[0.21.3]: Codex 流在生成中提前断开时会在同一总超时预算内自动重试一次
 # WHATSNEW[0.21.2]: 修复 Python 3.13+ 上画廊全线连不上(证书链严格校验),style search/pull 与 --style-online 恢复可用
 # WHATSNEW[0.21.1]: 修复 web 后端 img2img 失效——ChatGPT 换了 composer 文件输入框,参考图改投 #upload-files(旧选择器只命中表单外的 sr-only 假输入框)
 # WHATSNEW[0.21.0]: 新增 animate 子命令:一次生成4x2雪碧图,校验主体漂移并输出循环WebP/GIF
@@ -109,6 +110,8 @@ ANIMATION_DEFAULT_MAX_DRIFT = 8.0
 # images while still catching a genuine hang well inside the total budget.
 DEFAULT_STALL_TIMEOUT = 120.0
 DEFAULT_TOTAL_TIMEOUT = 300  # large images occasionally take 2-3 minutes
+CODEX_MAX_ATTEMPTS = 2
+CODEX_RETRY_DELAY = 1.0
 OAUTH_TOKEN_URL = "https://auth.openai.com/oauth/token"
 OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"  # Codex CLI's published client id
 FALLBACK_VERSION = "0.130.0"
@@ -122,7 +125,7 @@ VERSION_PATH = Path.home() / ".codex" / "version.json"
 # VERSION file to drift) and soft-notify if it's newer. Never blocks, never
 # touches stdout, silenced by `--no-progress` or CHATGPT_IMAGEGEN_NO_UPDATE_CHECK.
 UPDATE_CHECK_URL = (
-    "https://raw.githubusercontent.com/leeguooooo/chatgpt-imagegen/main/chatgpt-imagegen"
+    "https://raw.githubusercontent.com/whmc76/chatgpt-imagegen/main/chatgpt-imagegen"
 )
 UPDATE_CHECK_INTERVAL = 86400  # seconds; at most one network check per day
 
@@ -175,6 +178,10 @@ class GatewayError(RuntimeError):
     def __init__(self, message: str, status: int | None = None) -> None:
         super().__init__(message)
         self.status = status
+
+
+class TransientGatewayError(GatewayError):
+    """A transport/backend failure that is safe to retry within the same budget."""
 
 
 class WebUnavailable(GatewayError):
@@ -771,6 +778,7 @@ def _post_for_image(
     last_revised_prompt: str = ""
     last_phase = "connecting"
     failure_detail: str | None = None
+    saw_terminal_event = False
 
     def emit(msg: str) -> None:
         if progress:
@@ -781,6 +789,8 @@ def _post_for_image(
             t = evt.get("type", "?")
             saw_event_types[t] = saw_event_types.get(t, 0) + 1
             first = saw_event_types[t] == 1
+            if t in ("response.completed", "response.failed", "response.incomplete"):
+                saw_terminal_event = True
             if t == "response.image_generation_call.in_progress" and first:
                 last_phase = "queued"
                 emit("queued")
@@ -817,7 +827,12 @@ def _post_for_image(
                             last_revised_prompt = item["revised_prompt"]
     except urllib.error.HTTPError as e:
         body_text = e.read().decode("utf-8", errors="ignore")
-        raise GatewayError(f"HTTP {e.code}: {body_text[:600]}", status=e.code) from None
+        error_cls = (
+            TransientGatewayError
+            if e.code in (408, 409, 425) or e.code >= 500
+            else GatewayError
+        )
+        raise error_cls(f"HTTP {e.code}: {body_text[:600]}", status=e.code) from None
     except (TimeoutError, ConnectionError):
         # Socket read timed out or the connection dropped mid-stream. Surface a
         # clean, actionable message — naming the phase we stalled in and how long
@@ -830,19 +845,26 @@ def _post_for_image(
                 f"(last phase: {last_phase}, {elapsed:.0f}s elapsed). "
                 f"Raise --timeout for very large images."
             ) from None
-        raise GatewayError(
+        raise TransientGatewayError(
             f"stalled: the image backend sent no data for ~{int(stall_timeout)}s "
             f"(last phase: {last_phase}, {elapsed:.0f}s elapsed). It may be "
             f"overloaded — retry, or raise --stall-timeout / --timeout."
         ) from None
     except urllib.error.URLError as e:
-        raise GatewayError(f"network error contacting the image backend: {e.reason}") from None
+        raise TransientGatewayError(
+            f"network error contacting the image backend: {e.reason}"
+        ) from None
 
     if not image_b64:
         types_seen = ", ".join(sorted(saw_event_types)) or "(none)"
         if failure_detail:
             raise GatewayError(
                 f"backend failed mid-generation: {failure_detail} "
+                f"(events seen: {types_seen})"
+            )
+        if not saw_terminal_event:
+            raise TransientGatewayError(
+                f"incomplete response stream ended before a terminal event "
                 f"(events seen: {types_seen})"
             )
         raise GatewayError(f"no image returned. events seen: {types_seen}")
@@ -853,7 +875,9 @@ def _post_for_image(
     try:
         image_bytes = base64.b64decode(image_b64, validate=True)
     except Exception:
-        raise GatewayError("backend returned invalid base64 in image_generation_call.result") from None
+        raise TransientGatewayError(
+            "backend returned invalid base64 in image_generation_call.result"
+        ) from None
     return image_bytes, item_meta
 
 
@@ -2301,8 +2325,28 @@ def _run_codex_locked(
         headers = _build_headers(token, account_id, version)
         return _post_for_image(payload, headers, deadline, start, stall_timeout, progress)
 
+    def _attempt_with_retry(token: str) -> tuple[bytes, JsonDict]:
+        for attempt in range(1, CODEX_MAX_ATTEMPTS + 1):
+            try:
+                return _attempt(token)
+            except TransientGatewayError as e:
+                remaining = deadline - time.monotonic()
+                if attempt >= CODEX_MAX_ATTEMPTS or remaining <= CODEX_RETRY_DELAY:
+                    raise
+                if progress:
+                    print(
+                        _fmt_progress(
+                            time.monotonic() - start,
+                            f"transient backend interruption; retrying "
+                            f"({attempt + 1}/{CODEX_MAX_ATTEMPTS})",
+                        ),
+                        file=sys.stderr,
+                    )
+                time.sleep(min(CODEX_RETRY_DELAY, max(0.0, remaining)))
+        raise AssertionError("unreachable")
+
     try:
-        return _attempt(access)
+        return _attempt_with_retry(access)
     except GatewayError as e:
         # Auto-refresh on 401/403 once, then retry. Any other error → fail clean.
         if e.status in (401, 403) and refresh:
@@ -2335,7 +2379,7 @@ def _run_codex_locked(
                     file=sys.stderr,
                 )
             try:
-                return _attempt(new_access)
+                return _attempt_with_retry(new_access)
             except GatewayError as retry_err:
                 sys.exit(str(retry_err))
         else:
@@ -3897,7 +3941,7 @@ subcommands:
   chatgpt-imagegen style <verb>    manage reusable style/character assets (alias: styles)
   chatgpt-imagegen update          upgrade this CLI (alias: upgrade)
 
-docs: https://github.com/leeguooooo/chatgpt-imagegen
+docs: https://github.com/whmc76/chatgpt-imagegen
 """
 
 

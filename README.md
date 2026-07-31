@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/whmc76/chatgpt-imagegen/actions/workflows/ci.yml/badge.svg)](https://github.com/whmc76/chatgpt-imagegen/actions/workflows/ci.yml)
 
-> Windows-stable fork of [leeguooooo/chatgpt-imagegen](https://github.com/leeguooooo/chatgpt-imagegen). This fork adds native Windows process locking, Windows CI, a self-contained Codex skill layout, bounded-wait defaults, and verified Windows instructions while preserving the upstream MIT license and history.
+> Windows-stable fork of [leeguooooo/chatgpt-imagegen](https://github.com/leeguooooo/chatgpt-imagegen). This fork adds native Windows process locking, one bounded retry for transient Codex stream interruptions, Windows CI, a self-contained Codex skill layout, and verified Windows instructions while preserving the upstream MIT license and history.
 
 **English** | [中文](./README.zh-CN.md)
 

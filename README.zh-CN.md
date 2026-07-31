@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/whmc76/chatgpt-imagegen/actions/workflows/ci.yml/badge.svg)](https://github.com/whmc76/chatgpt-imagegen/actions/workflows/ci.yml)
 
-> 这是 [leeguooooo/chatgpt-imagegen](https://github.com/leeguooooo/chatgpt-imagegen) 的 Windows 稳定版 fork。它增加了原生 Windows 进程锁、Windows CI、自包含的 Codex skill 目录、有限等待默认值和经过实测的 Windows 使用方式，同时保留上游 MIT 许可证与完整历史。
+> 这是 [leeguooooo/chatgpt-imagegen](https://github.com/leeguooooo/chatgpt-imagegen) 的 Windows 稳定版 fork。它增加了原生 Windows 进程锁、Codex 瞬时断流的一次有界重试、Windows CI、自包含的 Codex skill 目录和经过实测的 Windows 使用方式，同时保留上游 MIT 许可证与完整历史。
 
 [English](./README.md) | **中文**
 
