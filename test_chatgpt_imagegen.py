@@ -16,9 +16,13 @@ import json
 import os
 import re
 import ssl
+import subprocess
+import sys
 import tempfile
+import time
 import unittest
 import unittest.mock
+import uuid
 from contextlib import contextmanager
 from contextlib import redirect_stderr
 from contextlib import redirect_stdout
@@ -69,6 +73,54 @@ class SniffMime(unittest.TestCase):
 
     def test_unknown(self):
         self.assertIsNone(cig._sniff_mime(b"not an image at all"))
+
+
+class DistributionLayout(unittest.TestCase):
+    def test_skill_script_matches_standalone_cli(self):
+        root = Path(__file__).parent
+        self.assertEqual(
+            (root / "chatgpt-imagegen").read_bytes(),
+            (root / "scripts" / "chatgpt-imagegen").read_bytes(),
+        )
+
+
+class ConcurrencySlot(unittest.TestCase):
+    def test_serializes_across_processes(self):
+        script = str(Path(__file__).parent / "chatgpt-imagegen")
+        kind = f"test-{uuid.uuid4().hex}"
+        child_code = r'''
+import importlib.machinery
+import importlib.util
+import sys
+import time
+
+loader = importlib.machinery.SourceFileLoader("cig_child", sys.argv[1])
+spec = importlib.util.spec_from_loader("cig_child", loader)
+module = importlib.util.module_from_spec(spec)
+loader.exec_module(module)
+with module._concurrency_slot(sys.argv[2], 1, False, time.monotonic()):
+    print("ready", flush=True)
+    time.sleep(0.75)
+'''
+        proc = subprocess.Popen(
+            [sys.executable, "-c", child_code, script, kind],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            self.assertEqual(proc.stdout.readline().strip(), "ready")
+            started = time.monotonic()
+            with cig._concurrency_slot(kind, 1, False, time.monotonic()):
+                waited = time.monotonic() - started
+            self.assertGreaterEqual(waited, 0.45)
+            self.assertEqual(proc.wait(timeout=5), 0, proc.stderr.read())
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait(timeout=5)
+            proc.stdout.close()
+            proc.stderr.close()
 
 
 class VersionTuple(unittest.TestCase):
@@ -171,7 +223,8 @@ class UpdateNotify(unittest.TestCase):
         # Both __version__ and the newest WHATSNEW line must sit in the first 8KB,
         # since the reminder only reads that prefix of the remote script.
         head = Path(os.path.join(os.path.dirname(__file__),
-                                 "chatgpt-imagegen")).read_text()[:8192]
+                                 "chatgpt-imagegen")).read_text(
+                                     encoding="utf-8")[:8192]
         m = re.search(r'__version__\s*=\s*"([\d.]+)"', head)
         self.assertEqual(m.group(1), cig.__version__)
         notes = cig._parse_whatsnew(head)
@@ -1481,7 +1534,8 @@ class OidcPkce(unittest.TestCase):
             cig._save_platform_auth({"access_token": "at", "refresh_token": "rt",
                                      "expires_at": 9999999999})
             p = cig._platform_auth_path()
-            self.assertEqual(p.stat().st_mode & 0o777, 0o600)
+            if os.name != "nt":
+                self.assertEqual(p.stat().st_mode & 0o777, 0o600)
             self.assertEqual(cig._load_platform_auth()["access_token"], "at")
 
     def test_expired_token_triggers_refresh(self):

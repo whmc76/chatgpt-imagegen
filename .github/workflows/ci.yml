@@ -7,11 +7,23 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        include:
+          - os: ubuntu-latest
+            python-version: "3.10"
+          - os: ubuntu-latest
+            python-version: "3.11"
+          - os: ubuntu-latest
+            python-version: "3.12"
+          - os: ubuntu-latest
+            python-version: "3.13"
+          - os: windows-latest
+            python-version: "3.10"
+          - os: windows-latest
+            python-version: "3.14"
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
@@ -23,3 +35,6 @@ jobs:
         run: python -m py_compile chatgpt-imagegen
       - name: Run unit tests
         run: python -m unittest test_chatgpt_imagegen -v
+      - name: Validate Codex skill
+        run: >-
+          python -c "from pathlib import Path; s=Path('SKILL.md').read_text(encoding='utf-8'); assert s.splitlines()[:2]==['---','name: chatgpt-imagegen']; assert '[TODO' not in s"

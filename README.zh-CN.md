@@ -1,6 +1,8 @@
 # chatgpt-imagegen
 
-[![CI](https://github.com/leeguooooo/chatgpt-imagegen/actions/workflows/ci.yml/badge.svg)](https://github.com/leeguooooo/chatgpt-imagegen/actions/workflows/ci.yml)
+[![CI](https://github.com/whmc76/chatgpt-imagegen/actions/workflows/ci.yml/badge.svg)](https://github.com/whmc76/chatgpt-imagegen/actions/workflows/ci.yml)
+
+> 这是 [leeguooooo/chatgpt-imagegen](https://github.com/leeguooooo/chatgpt-imagegen) 的 Windows 稳定版 fork。它增加了原生 Windows 进程锁、Windows CI、自包含的 Codex skill 目录、有限等待默认值和经过实测的 Windows 使用方式，同时保留上游 MIT 许可证与完整历史。
 
 [English](./README.md) | **中文**
 
@@ -24,7 +26,7 @@ chatgpt-imagegen "一只坐在窗台的水彩橘猫" -o cat.png
 **给 AI agent 用(推荐)**——把 skill 装进 Claude Code、Codex、Cursor 等:
 
 ```bash
-npx skills add leeguooooo/chatgpt-imagegen -g
+npx skills add whmc76/chatgpt-imagegen -g
 ```
 
 然后直接说:*"画一张 …"*。
@@ -32,9 +34,20 @@ npx skills add leeguooooo/chatgpt-imagegen -g
 **独立命令行**——不用 `pip`、不用虚拟环境:
 
 ```bash
-git clone https://github.com/leeguooooo/chatgpt-imagegen
+git clone https://github.com/whmc76/chatgpt-imagegen
 sudo install chatgpt-imagegen/chatgpt-imagegen /usr/local/bin/chatgpt-imagegen
 ```
+
+**Windows Codex 快速开始**——不需要浏览器扩展：
+
+```powershell
+git clone https://github.com/whmc76/chatgpt-imagegen
+cd chatgpt-imagegen
+py -3 .\chatgpt-imagegen doctor
+py -3 .\chatgpt-imagegen "一只坐在窗台的水彩猫" --backend codex --timeout 300 --stall-timeout 90 -o cat.png
+```
+
+`codex` 后端会消耗 Codex 用量。可选的 `web` 后端通过 `chrome-use` 使用已登录的 Chrome，并保持串行运行。
 
 还需要**一个后端**——`web`(默认,驱动你登录着的 Chrome,不花 Codex 用量)或 `codex`(无头兜底)。`chatgpt-imagegen doctor` 看哪个就绪。→ **[后端与排错](https://drawstyle.leeguoo.com/zh/docs/backends)**
 
