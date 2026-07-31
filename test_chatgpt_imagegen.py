@@ -84,6 +84,49 @@ class DistributionLayout(unittest.TestCase):
         )
 
 
+class CodexStreamRecovery(unittest.TestCase):
+    def test_incomplete_stream_is_retryable(self):
+        events = iter([
+            {"type": "response.created"},
+            {"type": "response.image_generation_call.in_progress"},
+            {"type": "response.in_progress"},
+        ])
+        now = time.monotonic()
+        with unittest.mock.patch.object(cig, "_stream", return_value=events):
+            with self.assertRaises(cig.TransientGatewayError) as cm:
+                cig._post_for_image({}, {}, now + 30, now, 10, False)
+        self.assertIn("incomplete response stream", str(cm.exception))
+
+    def test_terminal_stream_without_image_is_not_retryable(self):
+        events = iter([
+            {"type": "response.created"},
+            {"type": "response.completed"},
+        ])
+        now = time.monotonic()
+        with unittest.mock.patch.object(cig, "_stream", return_value=events):
+            with self.assertRaises(cig.GatewayError) as cm:
+                cig._post_for_image({}, {}, now + 30, now, 10, False)
+        self.assertNotIsInstance(cm.exception, cig.TransientGatewayError)
+
+    def test_codex_retries_one_transient_failure(self):
+        args = unittest.mock.Mock(timeout=30)
+        success = (b"image-bytes", {"type": "image_generation_call"})
+        with unittest.mock.patch.object(
+            cig,
+            "_post_for_image",
+            side_effect=[cig.TransientGatewayError("early EOF"), success],
+        ) as post, unittest.mock.patch.object(
+            cig, "_build_headers", return_value={}
+        ), unittest.mock.patch.object(cig.time, "sleep") as sleep:
+            result = cig._run_codex_locked(
+                args, False, 10, time.monotonic(), {}, "account", "token",
+                None, "0.0", {},
+            )
+        self.assertEqual(result, success)
+        self.assertEqual(post.call_count, 2)
+        sleep.assert_called_once()
+
+
 class ConcurrencySlot(unittest.TestCase):
     def test_serializes_across_processes(self):
         script = str(Path(__file__).parent / "chatgpt-imagegen")
